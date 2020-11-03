@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+	<head>		
+	   <title>____________glTF2_Loader_________</title>
+	   <style>
+	   body { margin: 0; }
+	   canvas { width: 100%; height: 100% }
+	 </style>
+ 	</head>
+	<body>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r122/three.min.js" integrity="sha512-bzjaf85dHTL4H0BvkAJ/Jbvxqf1rDj+jVpCNe3oxQj/RXSnkx1HnKhqIcmMWghxEAbXsYgddrc38saWpltlkug==" crossorigin="anonymous"></script>
+		<script src="https://cdn.rawgit.com/mrdoob/three.js/master/examples/js/controls/OrbitControls.js"></script>
+		<script src="https://cdn.rawgit.com/mrdoob/three.js/master/examples/js/loaders/GLTFLoader.js"></script>
+		<!-- <script src="https://cdn.rawgit.com/mrdoob/three.js/master/examples/jsm/libs/stats.module.js"></script> -->
+
+		<script type="x-shader/x-vertex" id="vertexShader">
+
+			varying vec3 vWorldPosition;
+
+			void main() {
+
+				vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+				vWorldPosition = worldPosition.xyz;
+
+				gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentShader">
+
+			uniform vec3 topColor;
+			uniform vec3 bottomColor;
+			uniform float offset;
+			uniform float exponent;
+
+			varying vec3 vWorldPosition;
+
+			void main() {
+
+				float h = normalize( vWorldPosition + offset ).y;
+				gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h , 0.0), exponent ), 0.0 ) ), 1.0 );
+
+			}
+
+		</script>
+
+		<script>		
+
+			// Load 3D Scene
+			var scene = new THREE.Scene(); 
+			scene.background = new THREE.Color().setHSL( 0.6, 0, 1 );
+			scene.fog = new THREE.Fog( scene.background, 1, 5000 );
+
+			// Load Camera Perspective
+			var camera = new THREE.PerspectiveCamera( 25, window.innerWidth / window.innerHeight, 1, 20000 );
+			camera.position.set( 1, 1, 20 );
+			
+			// Load a Renderer
+			renderer = new THREE.WebGLRenderer( { antialias: true } );
+			renderer.setPixelRatio( window.devicePixelRatio );
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+			renderer.outputEncoding = THREE.sRGBEncoding;
+			renderer.shadowMap.enabled = true;
+			
+			// Load the Orbitcontroller
+			var controls = new THREE.OrbitControls( camera, renderer.domElement ); 
+					
+					
+			// Load Light
+			// var ambientLight = new THREE.AmbientLight( 0xcccccc );
+			// scene.add( ambientLight );
+			const hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 0.6 );
+			hemiLight.color.setHSL( 0.6, 1, 0.6 );
+			hemiLight.groundColor.setHSL( 0.095, 1, 0.75 );
+			hemiLight.position.set( 0, 50, 0 );
+			scene.add( hemiLight );
+
+			const hemiLightHelper = new THREE.HemisphereLightHelper( hemiLight, 10 );
+			scene.add( hemiLightHelper );
+
+			// const dirLight = new THREE.DirectionalLight( 0xffffff, 1 );
+			// dirLight.color.setHSL( 0.1, 1, 0.95 );
+			// dirLight.position.set( - 1, 1.75, 1 );
+			// dirLight.position.multiplyScalar( 30 );
+			// scene.add( dirLight );
+
+			// dirLight.castShadow = true;
+
+			// dirLight.shadow.mapSize.width = 2048;
+			// dirLight.shadow.mapSize.height = 2048;
+
+			// const d = 50;
+
+			// dirLight.shadow.camera.left = - d;
+			// dirLight.shadow.camera.right = d;
+			// dirLight.shadow.camera.top = d;
+			// dirLight.shadow.camera.bottom = - d;
+
+			// dirLight.shadow.camera.far = 3500;
+			// dirLight.shadow.bias = - 0.0001;
+
+			// const dirLightHelper = new THREE.DirectionalLightHelper( dirLight, 10 );
+			// scene.add( dirLightHelper );
+
+			// GROUND
+
+			const groundGeo = new THREE.PlaneBufferGeometry( 10000, 10000 );
+			const groundMat = new THREE.MeshLambertMaterial( { color: 0xffffff } );
+			groundMat.color.setHSL( 0.095, 1, 0.75 );
+
+			const ground = new THREE.Mesh( groundGeo, groundMat );
+			ground.position.y = - 33;
+			ground.rotation.x = - Math.PI / 2;
+			ground.receiveShadow = true;
+			scene.add( ground );
+
+			// SKYDOME
+
+			const vertexShader = document.getElementById( 'vertexShader' ).textContent;
+			const fragmentShader = document.getElementById( 'fragmentShader' ).textContent;
+			const uniforms = {
+				"topColor": { value: new THREE.Color( 0x0077ff ) },
+				"bottomColor": { value: new THREE.Color( 0xffffff ) },
+				"offset": { value: 33 },
+				"exponent": { value: 0.6 }
+			};
+			// uniforms[ "topColor" ].value.copy( hemiLight.color );
+
+			scene.fog.color.copy( uniforms[ "bottomColor" ].value );
+
+			const skyGeo = new THREE.SphereBufferGeometry( 4000, 32, 15 );
+			const skyMat = new THREE.ShaderMaterial( {
+				uniforms: uniforms,
+				vertexShader: vertexShader,
+				fragmentShader: fragmentShader,
+				side: THREE.BackSide
+			} );
+
+			const sky = new THREE.Mesh( skyGeo, skyMat );
+			scene.add( sky );
+					
+			var directionalLight = new THREE.DirectionalLight( 0xffffff );
+			directionalLight.position.set( 0, 1, 1 ).normalize();
+			scene.add( directionalLight );				
+
+			window.addEventListener( 'resize', onWindowResize, false );
+
+			function onWindowResize(){
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			// glTf 2.0 Loader
+			var loader = new THREE.GLTFLoader();				
+			loader.load( 'model/newRoomModel.glb', function ( gltf ) {
+				var object = gltf.scene;				
+				gltf.scene.scale.set( 2, 2, 2 );			   
+				gltf.scene.position.x = 0;				    //Position (x = right+ left-) 
+				gltf.scene.position.y = 0;				    //Position (y = up+, down-)
+				gltf.scene.position.z = 0;				    //Position (z = front +, back-)
+				
+				scene.add( gltf.scene );
+			});	 
+
+			function animate() {
+				render();
+				requestAnimationFrame( animate );
+			}
+
+			function render() {
+				renderer.render( scene, camera );
+			}
+
+			render();
+			animate();
+
+		</script>	
+	</body>
+</html>
